@@ -37,9 +37,15 @@ if __name__ == '__main__':
     # Vanilla BERT (HuggingFace):
     #   encoding_models = {'bert-base-uncased': 'bert_base'}
     #
-    # Fine-tuned BERT checkpoint (e.g. Aegis constitutional classifier):
+    # Fine-tuned BERT from HuggingFace (recommended — no local checkpoint needed):
+    #   encoding_models = {'urbas/bert_aegis': 'bert_aegis'}
+    #   (BertForSequenceClassification trained on nvidia/Aegis-AI-Content-Safety-Dataset-2.0,
+    #    val F1=0.856, ROC-AUC=0.916; threshold_tau and max_length read from config.json)
+    #
+    # Fine-tuned BERT from a local .pt checkpoint:
     #   encoding_models = {'bert_aegis.pt': 'bert_aegis'}
-    #   Uses pooler_output ([CLS] token) from the fine-tuned encoder as features.
+    #
+    # Both use pooler_output ([CLS] token) from the fine-tuned encoder as features.
     encoding_models = {'all-MiniLM-L6-v2': 'sbert22M'}
     og_perturbation_name = 'original'
     perturbation_names = ['character']

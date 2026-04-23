@@ -10,7 +10,12 @@ GPT2_MODELS = {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
 
 
 def _is_bert_model(model_name: str) -> bool:
-    return model_name.startswith('bert-') or model_name.endswith('.pt')
+    # bert-base-uncased style, local .pt checkpoint, or HuggingFace org/model ID
+    return (
+        model_name.startswith('bert-')
+        or model_name.endswith('.pt')
+        or ('/' in model_name and model_name not in GPT2_MODELS)
+    )
 
 
 def bert_encode(texts, model_name='bert-base-uncased', batch_size=32, checkpoint_path=None):
@@ -38,11 +43,12 @@ def bert_encode(texts, model_name='bert-base-uncased', batch_size=32, checkpoint
         model.resize_token_embeddings(len(tokenizer))
         model.load_state_dict(ckpt['model_state'])
     else:
-        max_length = 512
-        tokenizer  = BertTokenizer.from_pretrained(model_name)
-        model      = BertForSequenceClassification.from_pretrained(
+        tokenizer = BertTokenizer.from_pretrained(model_name)
+        model     = BertForSequenceClassification.from_pretrained(
             model_name, num_labels=1, ignore_mismatched_sizes=True,
         )
+        training_cfg = getattr(model.config, 'training_cfg', None)
+        max_length   = training_cfg.get('max_length', 512) if isinstance(training_cfg, dict) else 512
 
     model.eval()
     embeddings = []
