@@ -6,6 +6,31 @@ import pandas as pd
 import numpy as np
 import os
 
+GPT2_MODELS = {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
+
+
+def gpt2_encode(texts, model_name='gpt2', batch_size=32):
+    from transformers import GPT2Tokenizer, GPT2Model
+    import torch
+
+    tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+    tokenizer.pad_token = tokenizer.eos_token
+    model = GPT2Model.from_pretrained(model_name)
+    model.eval()
+
+    embeddings = []
+    with torch.no_grad():
+        for i in range(0, len(texts), batch_size):
+            batch = list(texts[i:i + batch_size])
+            encoded = tokenizer(batch, padding=True, truncation=True, max_length=512, return_tensors='pt')
+            outputs = model(**encoded)
+            hidden = outputs.last_hidden_state  # (batch, seq, hidden_dim)
+            mask = encoded['attention_mask'].unsqueeze(-1).float()
+            pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1)
+            embeddings.append(pooled.numpy())
+
+    return np.concatenate(embeddings, axis=0)
+
 
 def load_data(dataset_name, path='datasets'):
     if dataset_name == 'ruarobot':
@@ -124,11 +149,17 @@ def load_embeddings(dataset_name, encoding_model, encoding_model_name, perturbat
         y_test_neg = data[7]
 
         # Embed the sentences
-        encoder = SentenceTransformer(f'{encoding_model}')
-        X_train_pos = encoder.encode(X_train_pos, show_progress_bar=False)
-        X_train_neg = encoder.encode(X_train_neg, show_progress_bar=False)
-        X_test_pos = encoder.encode(X_test_pos, show_progress_bar=False)
-        X_test_neg = encoder.encode(X_test_neg, show_progress_bar=False)
+        if encoding_model in GPT2_MODELS:
+            X_train_pos = gpt2_encode(X_train_pos, encoding_model)
+            X_train_neg = gpt2_encode(X_train_neg, encoding_model)
+            X_test_pos = gpt2_encode(X_test_pos, encoding_model)
+            X_test_neg = gpt2_encode(X_test_neg, encoding_model)
+        else:
+            encoder = SentenceTransformer(f'{encoding_model}')
+            X_train_pos = encoder.encode(X_train_pos, show_progress_bar=False)
+            X_train_neg = encoder.encode(X_train_neg, show_progress_bar=False)
+            X_test_pos = encoder.encode(X_test_pos, show_progress_bar=False)
+            X_test_neg = encoder.encode(X_test_neg, show_progress_bar=False)
 
         # Rotate the data
         align_mat = load_align_mat(dataset_name, encoding_model_name, X_train_pos, load_saved_align_mat, path='datasets')

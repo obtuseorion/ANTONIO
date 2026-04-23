@@ -23,6 +23,10 @@ if __name__ == '__main__':
     # Variables
     path = 'datasets'
     dataset_names = ['ruarobot']
+    # To use GPT-2 as the encoder, replace the line below with:
+    #   encoding_models = {'gpt2': 'gpt2'}
+    # Other GPT-2 variants are also supported: 'gpt2-medium', 'gpt2-large', 'gpt2-xl'
+    # NOTE: only the small downstream classifier is formally verified, not GPT-2 itself.
     encoding_models = {'all-MiniLM-L6-v2': 'sbert22M'}
     og_perturbation_name = 'original'
     perturbation_names = ['character']
