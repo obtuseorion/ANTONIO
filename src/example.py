@@ -23,10 +23,23 @@ if __name__ == '__main__':
     # Variables
     path = 'datasets'
     dataset_names = ['ruarobot']
-    # To use GPT-2 as the encoder, replace the line below with:
-    #   encoding_models = {'gpt2': 'gpt2'}
-    # Other GPT-2 variants are also supported: 'gpt2-medium', 'gpt2-large', 'gpt2-xl'
-    # NOTE: only the small downstream classifier is formally verified, not GPT-2 itself.
+    # Encoder options (only the downstream Dense classifier is formally verified):
+    #
+    # SentenceTransformer (default):
+    #   encoding_models = {'all-MiniLM-L6-v2': 'sbert22M'}
+    #
+    # GPT-2 variants:
+    #   encoding_models = {'gpt2': 'gpt2'}            # 117 M params, 768-dim
+    #   encoding_models = {'gpt2-medium': 'gpt2med'}
+    #   encoding_models = {'gpt2-large':  'gpt2lg'}
+    #   encoding_models = {'gpt2-xl':     'gpt2xl'}
+    #
+    # Vanilla BERT (HuggingFace):
+    #   encoding_models = {'bert-base-uncased': 'bert_base'}
+    #
+    # Fine-tuned BERT checkpoint (e.g. Aegis constitutional classifier):
+    #   encoding_models = {'bert_aegis.pt': 'bert_aegis'}
+    #   Uses pooler_output ([CLS] token) from the fine-tuned encoder as features.
     encoding_models = {'all-MiniLM-L6-v2': 'sbert22M'}
     og_perturbation_name = 'original'
     perturbation_names = ['character']

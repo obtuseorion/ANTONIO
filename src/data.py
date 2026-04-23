@@ -9,6 +9,56 @@ import os
 GPT2_MODELS = {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
 
 
+def _is_bert_model(model_name: str) -> bool:
+    return model_name.startswith('bert-') or model_name.endswith('.pt')
+
+
+def bert_encode(texts, model_name='bert-base-uncased', batch_size=32, checkpoint_path=None):
+    """
+    Encode texts using a BERT model.
+
+    Pass checkpoint_path to load a fine-tuned BertForSequenceClassification
+    saved by the Aegis training script (keys: model_state, cfg, tau, ...).
+    Pass model_name alone to load a vanilla HuggingFace BERT encoder.
+
+    Returns mean-pooled [CLS] (pooler_output) embeddings, shape (N, hidden_dim).
+    """
+    from transformers import BertTokenizer, BertForSequenceClassification
+    import torch
+
+    if checkpoint_path is not None:
+        ckpt = torch.load(checkpoint_path, map_location='cpu')
+        cfg = ckpt['cfg']
+        hf_name   = cfg['model_name']
+        max_length = cfg['max_length']
+        tokenizer  = BertTokenizer.from_pretrained(hf_name)
+        model      = BertForSequenceClassification.from_pretrained(
+            hf_name, num_labels=1, ignore_mismatched_sizes=True,
+        )
+        model.resize_token_embeddings(len(tokenizer))
+        model.load_state_dict(ckpt['model_state'])
+    else:
+        max_length = 512
+        tokenizer  = BertTokenizer.from_pretrained(model_name)
+        model      = BertForSequenceClassification.from_pretrained(
+            model_name, num_labels=1, ignore_mismatched_sizes=True,
+        )
+
+    model.eval()
+    embeddings = []
+    with torch.no_grad():
+        for i in range(0, len(texts), batch_size):
+            batch   = list(texts[i:i + batch_size])
+            encoded = tokenizer(
+                batch, padding=True, truncation=True,
+                max_length=max_length, return_tensors='pt',
+            )
+            pooled = model.bert(**encoded).pooler_output  # (batch, hidden_dim)
+            embeddings.append(pooled.numpy())
+
+    return np.concatenate(embeddings, axis=0)
+
+
 def gpt2_encode(texts, model_name='gpt2', batch_size=32):
     from transformers import GPT2Tokenizer, GPT2Model
     import torch
@@ -152,14 +202,22 @@ def load_embeddings(dataset_name, encoding_model, encoding_model_name, perturbat
         if encoding_model in GPT2_MODELS:
             X_train_pos = gpt2_encode(X_train_pos, encoding_model)
             X_train_neg = gpt2_encode(X_train_neg, encoding_model)
-            X_test_pos = gpt2_encode(X_test_pos, encoding_model)
-            X_test_neg = gpt2_encode(X_test_neg, encoding_model)
+            X_test_pos  = gpt2_encode(X_test_pos,  encoding_model)
+            X_test_neg  = gpt2_encode(X_test_neg,  encoding_model)
+        elif _is_bert_model(encoding_model):
+            # .pt path → fine-tuned checkpoint; bert-* name → vanilla HuggingFace BERT
+            ckpt = encoding_model if encoding_model.endswith('.pt') else None
+            name = encoding_model if ckpt is None else 'bert-base-uncased'
+            X_train_pos = bert_encode(X_train_pos, name, checkpoint_path=ckpt)
+            X_train_neg = bert_encode(X_train_neg, name, checkpoint_path=ckpt)
+            X_test_pos  = bert_encode(X_test_pos,  name, checkpoint_path=ckpt)
+            X_test_neg  = bert_encode(X_test_neg,  name, checkpoint_path=ckpt)
         else:
             encoder = SentenceTransformer(f'{encoding_model}')
             X_train_pos = encoder.encode(X_train_pos, show_progress_bar=False)
             X_train_neg = encoder.encode(X_train_neg, show_progress_bar=False)
-            X_test_pos = encoder.encode(X_test_pos, show_progress_bar=False)
-            X_test_neg = encoder.encode(X_test_neg, show_progress_bar=False)
+            X_test_pos  = encoder.encode(X_test_pos,  show_progress_bar=False)
+            X_test_neg  = encoder.encode(X_test_neg,  show_progress_bar=False)
 
         # Rotate the data
         align_mat = load_align_mat(dataset_name, encoding_model_name, X_train_pos, load_saved_align_mat, path='datasets')
